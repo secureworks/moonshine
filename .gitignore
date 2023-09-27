@@ -1,0 +1,72 @@
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+#*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+#*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# macOS
+.DS_Store
+
+# Backup files
+*.bk
+
+# JupyterLab
+.ipynb_checkpoints/
+
+# CLion
+cmake-build-*/
+build-*/
+.idea/
+
+stage/
+build/
+bin/
+out/
+output/
+release/
+debug/
+install/
+.cpm_cache/
+
+modules/cffi/*.h
+modules/luasocket/*.h
+
+# Visual Studio
+.vs/
+.vscode/
+out/
+
+# CMake
+CMakeUserPresets.json
+
+# Build artifacts
+_build
+_install
+examples/win32mod/win32mod.dll

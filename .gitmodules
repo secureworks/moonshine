@@ -1,0 +1,6 @@
+[submodule "extern/moon/extern/luajit"]
+	path = extern/moon/extern/luajit
+	url = https://github.com/LuaJIT/LuaJIT
+[submodule "extern/moon/extern/lua"]
+	path = extern/moon/extern/lua
+	url = https://github.com/lua/lua

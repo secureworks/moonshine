@@ -1,0 +1,210 @@
+diff --git a/lauxlib.c b/lauxlib.c
+index 8ed1da11..59b6f90e 100644
+--- a/lauxlib.c
++++ b/lauxlib.c
+@@ -16,6 +16,8 @@
+ #include <stdlib.h>
+ #include <string.h>
+
++#include "mstate.h"
++#include "moutput.h"
+
+ /*
+ ** This file uses only the official API of Lua.
+@@ -1022,7 +1024,7 @@ static void *l_alloc (void *ud, void *ptr, size_t osize, size_t nsize) {
+ static int panic (lua_State *L) {
+   const char *msg = lua_tostring(L, -1);
+   if (msg == NULL) msg = "error object is not a string";
+-  lua_writestringerror("PANIC: unprotected error in call to Lua API (%s)\n",
++  moon_writestringerror(L, "PANIC: unprotected error in call to Lua API (%s)\n",
+                         msg);
+   return 0;  /* return to Lua to abort */
+ }
+@@ -1067,11 +1069,11 @@ static void warnfoff (void *ud, const char *message, int tocont) {
+ */
+ static void warnfcont (void *ud, const char *message, int tocont) {
+   lua_State *L = (lua_State *)ud;
+-  lua_writestringerror("%s", message);  /* write message */
++  moon_writestringerror(L, "%s", message);  /* write message */
+   if (tocont)  /* not the last part? */
+     lua_setwarnf(L, warnfcont, L);  /* to be continued */
+   else {  /* last part */
+-    lua_writestringerror("%s", "\n");  /* finish message with end-of-line */
++    moon_writestringerror(L, "%s", "\n");  /* finish message with end-of-line */
+     lua_setwarnf(L, warnfon, L);  /* next call is a new message */
+   }
+ }
+@@ -1091,6 +1093,7 @@ LUALIB_API lua_State *luaL_newstate (void) {
+     lua_atpanic(L, &panic);
+     lua_setwarnf(L, warnfoff, L);  /* default is warnings off */
+   }
++  moon_newstate_call_cb(L);
+   return L;
+ }
+
+diff --git a/lbaselib.c b/lbaselib.c
+index 1d60c9de..bfdf289f 100644
+--- a/lbaselib.c
++++ b/lbaselib.c
+@@ -20,6 +20,7 @@
+ #include "lauxlib.h"
+ #include "lualib.h"
+
++#include "moutput.h"
+
+ static int luaB_print (lua_State *L) {
+   int n = lua_gettop(L);  /* number of arguments */
+@@ -515,7 +516,7 @@ static const luaL_Reg base_funcs[] = {
+   {"next", luaB_next},
+   {"pairs", luaB_pairs},
+   {"pcall", luaB_pcall},
+-  {"print", luaB_print},
++  {"print", moon_print},
+   {"warn", luaB_warn},
+   {"rawequal", luaB_rawequal},
+   {"rawlen", luaB_rawlen},
+diff --git a/linit.c b/linit.c
+index 69808f84..e07a22ad 100644
+--- a/linit.c
++++ b/linit.c
+@@ -34,6 +34,9 @@
+ #include "lualib.h"
+ #include "lauxlib.h"
+
++#include "mloader.h"
++#include "mcompress.h"
++#include "mcompat.h"
+
+ /*
+ ** these libs are loaded by lua.c and are readily available to any Lua
+@@ -50,9 +53,15 @@ static const luaL_Reg loadedlibs[] = {
+   {LUA_MATHLIBNAME, luaopen_math},
+   {LUA_UTF8LIBNAME, luaopen_utf8},
+   {LUA_DBLIBNAME, luaopen_debug},
++  {LUA_MLOADERLIBNAME, luaopen_mloader},
+   {NULL, NULL}
+ };
+
++static const luaL_Reg preloadedlibs[] = {
++    {LUA_MCOMPRESSLIBNAME, luaopen_mcompress},
++    { NULL,		NULL }
++};
++
+
+ LUALIB_API void luaL_openlibs (lua_State *L) {
+   const luaL_Reg *lib;
+@@ -61,5 +70,12 @@ LUALIB_API void luaL_openlibs (lua_State *L) {
+     luaL_requiref(L, lib->name, lib->func, 1);
+     lua_pop(L, 1);  /* remove lib */
+   }
++  luaL_findtable(L, LUA_REGISTRYINDEX, "_PRELOAD",
++                 sizeof(preloadedlibs)/sizeof(preloadedlibs[0])-1);
++  for (lib = preloadedlibs; lib->func; lib++) {
++    lua_pushcfunction(L, lib->func);
++    lua_setfield(L, -2, lib->name);
++  }
++  lua_pop(L, 1);
+ }
+
+diff --git a/loadlib.c b/loadlib.c
+index 6f9fa373..c8db9cce 100644
+--- a/loadlib.c
++++ b/loadlib.c
+@@ -23,6 +23,11 @@
+ #include "lauxlib.h"
+ #include "lualib.h"
+
++#include "mloader.h"
++
++#ifdef _WIN32
++#include "mwinapi.h"
++#endif
+
+ /*
+ ** LUA_IGMARK is a mark to ignore all before it when building the
+@@ -178,7 +183,7 @@ static void setprogdir (lua_State *L) {
+   char buff[MAX_PATH + 1];
+   char *lb;
+   DWORD nsize = sizeof(buff)/sizeof(char);
+-  DWORD n = GetModuleFileNameA(NULL, buff, nsize);  /* get exec. name */
++  DWORD n = moon_GetModuleFileNameA(NULL, buff, nsize);  /* get exec. name */
+   if (n == 0 || n == nsize || (lb = strrchr(buff, '\\')) == NULL)
+     luaL_error(L, "unable to get ModuleFileName");
+   else {
+@@ -202,12 +207,12 @@ static void pusherror (lua_State *L) {
+ }
+
+ static void lsys_unloadlib (void *lib) {
+-  FreeLibrary((HMODULE)lib);
++  moon_FreeLibrary((HMODULE)lib);
+ }
+
+
+ static void *lsys_load (lua_State *L, const char *path, int seeglb) {
+-  HMODULE lib = LoadLibraryExA(path, NULL, LUA_LLE_FLAGS);
++  HMODULE lib = moon_LoadLibraryExA(path, NULL, LUA_LLE_FLAGS);
+   (void)(seeglb);  /* not used: symbols are 'global' by default */
+   if (lib == NULL) pusherror(L);
+   return lib;
+@@ -215,7 +220,7 @@ static void *lsys_load (lua_State *L, const char *path, int seeglb) {
+
+
+ static lua_CFunction lsys_sym (lua_State *L, void *lib, const char *sym) {
+-  lua_CFunction f = (lua_CFunction)(voidf)GetProcAddress((HMODULE)lib, sym);
++  lua_CFunction f = (lua_CFunction)(voidf)moon_GetProcAddress((HMODULE)lib, sym);
+   if (f == NULL) pusherror(L);
+   return f;
+ }
+@@ -709,7 +714,8 @@ static const luaL_Reg ll_funcs[] = {
+
+ static void createsearcherstable (lua_State *L) {
+   static const lua_CFunction searchers[] =
+-    {searcher_preload, searcher_Lua, searcher_C, searcher_Croot, NULL};
++    //{searcher_preload, searcher_Lua, searcher_C, searcher_Croot, NULL};
++      {searcher_preload, moon_loader_lua, moon_loader_c, NULL};
+   int i;
+   /* create 'searchers' table */
+   lua_createtable(L, sizeof(searchers)/sizeof(searchers[0]) - 1, 0);
+diff --git a/lstate.c b/lstate.c
+index 1ffe1a0f..56bb9e4a 100644
+--- a/lstate.c
++++ b/lstate.c
+@@ -28,7 +28,6 @@
+ #include "ltm.h"
+
+
+-
+ /*
+ ** thread state + extra space
+ */
+diff --git a/luaconf.h b/luaconf.h
+index d42d14b7..34e07fdd 100644
+--- a/luaconf.h
++++ b/luaconf.h
+@@ -272,14 +272,26 @@
+ #if defined(LUA_BUILD_AS_DLL)	/* { */
+
+ #if defined(LUA_CORE) || defined(LUA_LIB)	/* { */
++#if defined(__cplusplus)
++#define LUA_API extern "C" __declspec(dllexport)
++#else
+ #define LUA_API __declspec(dllexport)
++#endif
+ #else						/* }{ */
++#if defined(__cplusplus)
++#define LUA_API extern "C" __declspec(dllimport)
++#else
+ #define LUA_API __declspec(dllimport)
++#endif
+ #endif						/* } */
+
+ #else				/* }{ */
+
++#if defined(__cplusplus)
++#define LUA_API		extern "C"
++#else
+ #define LUA_API		extern
++#endif
+
+ #endif				/* } */
+

@@ -1,0 +1,5 @@
+add_subdirectory(core)
+add_subdirectory(executable)
+if (WIN32)
+add_subdirectory(library)
+endif()

@@ -1,0 +1,349 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "base-windows",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/_build/${presetName}",
+      "installDir": "${sourceDir}/_install",
+      "toolchainFile": "C:/vcpkg/scripts/buildsystems/vcpkg.cmake",
+      "environment": {
+        "VCPKG_FEATURE_FLAGS": "manifests,versions,binarycaching,registries"
+      },
+      "cacheVariables": {
+        "CMAKE_SYSTEM_VERSION": "8.1",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "windows-x86_64-debug",
+      "inherits": "base-windows",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_AR": "C:/LLVM/bin/x86_64-w64-mingw32-ar.exe",
+        "CMAKE_ASM_COMPILER": "C:/LLVM/bin/x86_64-w64-mingw32-as.exe",
+        "CMAKE_C_COMPILER": "C:/LLVM/bin/x86_64-w64-mingw32-clang.exe",
+        "CMAKE_CXX_COMPILER": "C:/LLVM/bin/x86_64-w64-mingw32-clang++.exe",
+        "CMAKE_OBJCOPY": "C:/LLVM/bin/x86_64-w64-mingw32-objcopy.exe",
+        "CMAKE_RANLIB": "C:/LLVM/bin/x86_64-w64-mingw32-ranlib.exe",
+        "CMAKE_STRIP": "C:/LLVM/bin/x86_64-w64-mingw32-strip.exe",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_FLAGS_DEBUG": "-g",
+        "CMAKE_CXX_FLAGS_DEBUG": "-g",
+        "CMAKE_C_FLAGS_RELEASE": "-Os -DNDEBUG",
+        "CMAKE_CXX_FLAGS_RELEASE": "-Os -DNDEBUG",
+        "CMAKE_CXX_STANDARD_LIBRARIES": "-static-libgcc -static-libstdc++"
+      }
+    },
+    {
+      "name": "windows-x86_64-release",
+      "inherits": "windows-x86_64-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_STANDARD_LIBRARIES": "-s",
+        "CMAKE_CXX_STANDARD_LIBRARIES": "-static-libgcc -static-libstdc++ -s"
+      }
+    },
+    {
+      "name": "base-macos",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/_build/${presetName}",
+      "installDir": "${sourceDir}/_install",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
+    },
+    {
+      "name": "macos-x86_64-debug",
+      "inherits": "base-macos",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_AR": "/usr/bin/ar",
+        "CMAKE_C_COMPILER": "/usr/bin/clang",
+        "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
+        "CMAKE_LINKER": "/usr/bin/ld",
+        "CMAKE_RANLIB": "/usr/bin/ranlib",
+        "CMAKE_STRIP": "/usr/bin/strip",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_FLAGS": "-Wno-deprecated-declarations",
+        "CMAKE_CXX_FLAGS": "-Wno-deprecated-declarations",
+        "CMAKE_C_FLAGS_DEBUG": "-g",
+        "CMAKE_CXX_FLAGS_DEBUG": "-g",
+        "CMAKE_C_FLAGS_RELEASE": "-Os -DNDEBUG",
+        "CMAKE_CXX_FLAGS_RELEASE": "-Os -DNDEBUG"
+      }
+    },
+    {
+      "name": "macos-x86_64-release",
+      "inherits": "macos-x86_64-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "base-linux",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/_build/${presetName}",
+      "installDir": "${sourceDir}/_install",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "linux-x86_64-debug",
+      "inherits": "base-linux",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_AR": "/usr/bin/llvm-ar-14",
+        "CMAKE_ASM_COMPILER": "/usr/bin/llvm-as-14",
+        "CMAKE_C_COMPILER": "/usr/bin/clang-14",
+        "CMAKE_CXX_COMPILER": "/usr/bin/clang++-14",
+        "CMAKE_OBJCOPY": "/usr/bin/llvm-objcopy-14",
+        "CMAKE_RANLIB": "/usr/bin/llvm-ranlib-14",
+        "CMAKE_STRIP": "/usr/bin/llvm-strip-14",
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_FLAGS_DEBUG": "-g",
+        "CMAKE_CXX_FLAGS_DEBUG": "-g",
+        "CMAKE_C_FLAGS_RELEASE": "-Os -DNDEBUG",
+        "CMAKE_CXX_FLAGS_RELEASE": "-Os -DNDEBUG",
+        "CMAKE_CXX_STANDARD_LIBRARIES": "-static-libgcc -static-libstdc++"
+      }
+    },
+    {
+      "name": "linux-x86_64-release",
+      "inherits": "linux-x86_64-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_STANDARD_LIBRARIES": "-s",
+        "CMAKE_CXX_STANDARD_LIBRARIES": "-static-libgcc -static-libstdc++ -s"
+      }
+    },
+    {
+      "name": "base-crosscompile",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/_build/${presetName}",
+      "installDir": "${sourceDir}/_install"
+    },
+    {
+      "name": "crosscompile-mingw-x86_64-debug",
+      "inherits": "base-crosscompile",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_FLAGS_DEBUG": "-g",
+        "CMAKE_CXX_FLAGS_DEBUG": "-g",
+        "CMAKE_C_FLAGS_RELEASE": "-Os -DNDEBUG",
+        "CMAKE_CXX_FLAGS_RELEASE": "-Os -DNDEBUG",
+        "CMAKE_CXX_STANDARD_LIBRARIES": "-static-libgcc -static-libstdc++",
+        "CMAKE_SYSTEM_VERSION": "8.1"
+      }
+    },
+    {
+      "name": "crosscompile-mingw-x86_64-release",
+      "inherits": "crosscompile-mingw-x86_64-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_STANDARD_LIBRARIES": "-s",
+        "CMAKE_CXX_STANDARD_LIBRARIES": "-static-libgcc -static-libstdc++ -s"
+      }
+    },
+    {
+      "name": "crosscompile-linux-x86_64-debug",
+      "inherits": "base-crosscompile",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_FLAGS_DEBUG": "-g",
+        "CMAKE_CXX_FLAGS_DEBUG": "-g",
+        "CMAKE_C_FLAGS_RELEASE": "-Os -DNDEBUG",
+        "CMAKE_CXX_FLAGS_RELEASE": "-Os -DNDEBUG",
+        "CMAKE_CXX_STANDARD_LIBRARIES": "-static-libgcc -static-libstdc++"
+      }
+    },
+    {
+      "name": "crosscompile-linux-x86_64-release",
+      "inherits": "crosscompile-linux-x86_64-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_STANDARD_LIBRARIES": "-s",
+        "CMAKE_CXX_STANDARD_LIBRARIES": "-static-libgcc -static-libstdc++ -s"
+      }
+    },
+    {
+      "name": "crosscompile-macos-x86_64-debug",
+      "inherits": "base-crosscompile",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_FLAGS_DEBUG": "-g",
+        "CMAKE_CXX_FLAGS_DEBUG": "-g",
+        "CMAKE_C_FLAGS_RELEASE": "-Os -DNDEBUG",
+        "CMAKE_CXX_FLAGS_RELEASE": "-Os -DNDEBUG"
+      }
+    },
+    {
+      "name": "crosscompile-macos-x86_64-release",
+      "inherits": "crosscompile-macos-x86_64-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_STANDARD_LIBRARIES": "-s",
+        "CMAKE_CXX_STANDARD_LIBRARIES": "-s"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-x86_64-release-build",
+      "configurePreset": "windows-x86_64-release"
+    },
+    {
+      "name": "windows-x86_64-debug-build",
+      "configurePreset": "windows-x86_64-debug"
+    },
+    {
+      "name": "macos-x86_64-release-build",
+      "configurePreset": "macos-x86_64-release"
+    },
+    {
+      "name": "macos-x86_64-debug-build",
+      "configurePreset": "macos-x86_64-debug"
+    },
+    {
+      "name": "linux-x86_64-release-build",
+      "configurePreset": "linux-x86_64-release"
+    },
+    {
+      "name": "linux-x86_64-debug-build",
+      "configurePreset": "linux-x86_64-debug"
+    },
+    {
+      "name": "crosscompile-mingw-x86_64-release-build",
+      "configurePreset": "crosscompile-mingw-x86_64-release"
+    },
+    {
+      "name": "crosscompile-mingw-x86_64-debug-build",
+      "configurePreset": "crosscompile-mingw-x86_64-debug"
+    },
+    {
+      "name": "crosscompile-linux-x86_64-release-build",
+      "configurePreset": "crosscompile-linux-x86_64-release"
+    },
+    {
+      "name": "crosscompile-linux-x86_64-debug-build",
+      "configurePreset": "crosscompile-linux-x86_64-debug"
+    },
+    {
+      "name": "crosscompile-macos-x86_64-release-build",
+      "configurePreset": "crosscompile-macos-x86_64-release"
+    },
+    {
+      "name": "crosscompile-macos-x86_64-debug-build",
+      "configurePreset": "crosscompile-macos-x86_64-debug"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "windows-x86_64-debug-test",
+      "configurePreset": "windows-x86_64-debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "filter": {
+        "exclude": {
+          "name": ".*_NOT_BUILT.*|hydrogen-tests"
+        }
+      }
+    },
+    {
+      "name": "macos-x86_64-debug-test",
+      "configurePreset": "macos-x86_64-debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "filter": {
+        "exclude": {
+          "name": ".*_NOT_BUILT.*|hydrogen-tests"
+        }
+      }
+    },
+    {
+      "name": "linux-x86_64-debug-test",
+      "configurePreset": "linux-x86_64-debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "filter": {
+        "exclude": {
+          "name": ".*_NOT_BUILT.*|hydrogen-tests"
+        }
+      }
+    },
+    {
+      "name": "crosscompile-mingw-x86_64-debug-test",
+      "configurePreset": "crosscompile-mingw-x86_64-debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "filter": {
+        "exclude": {
+          "name": ".*_NOT_BUILT.*|hydrogen-tests"
+        }
+      }
+    },
+    {
+      "name": "crosscompile-linux-x86_64-debug-test",
+      "configurePreset": "crosscompile-linux-x86_64-debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "filter": {
+        "exclude": {
+          "name": ".*_NOT_BUILT.*|hydrogen-tests"
+        }
+      }
+    },
+    {
+      "name": "crosscompile-macos-x86_64-debug-test",
+      "configurePreset": "crosscompile-macos-x86_64-debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "filter": {
+        "exclude": {
+          "name": ".*_NOT_BUILT.*|hydrogen-tests"
+        }
+      }
+    }
+  ]
+}

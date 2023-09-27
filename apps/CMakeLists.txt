@@ -1,0 +1,3 @@
+add_subdirectory(implant_patcher)
+add_subdirectory(generate_patch_header)
+add_subdirectory(lib2header)

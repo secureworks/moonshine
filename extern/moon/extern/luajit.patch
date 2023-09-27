@@ -1,0 +1,443 @@
+diff --git a/src/lib_aux.c b/src/lib_aux.c
+index b8e56436..f950abba 100644
+--- a/src/lib_aux.c
++++ b/src/lib_aux.c
+@@ -26,6 +26,9 @@
+ #include <sys/wait.h>
+ #endif
+
++#include "mstate.h"
++#include "moutput.h"
++
+ /* -- I/O error handling -------------------------------------------------- */
+
+ LUALIB_API int luaL_fileresult(lua_State *L, int stat, const char *fname)
+@@ -311,10 +314,9 @@ LUALIB_API void luaL_unref(lua_State *L, int t, int ref)
+ static int panic(lua_State *L)
+ {
+   const char *s = lua_tostring(L, -1);
+-  fputs("PANIC: unprotected error in call to Lua API (", stderr);
+-  fputs(s ? s : "?", stderr);
+-  fputc(')', stderr); fputc('\n', stderr);
+-  fflush(stderr);
++  moon_writestring(L, "PANIC: unprotected error in call to Lua API (");
++  moon_writestring(L, s ? s : "?");
++  moon_writestring(L, ")\n");
+   return 0;
+ }
+
+@@ -340,6 +342,7 @@ LUALIB_API lua_State *luaL_newstate(void)
+ {
+   lua_State *L = lua_newstate(mem_alloc, NULL);
+   if (L) G(L)->panic = panic;
++  moon_newstate_call_cb(L);
+   return L;
+ }
+
+@@ -354,6 +357,7 @@ LUALIB_API lua_State *luaL_newstate(void)
+   L = lua_newstate(LJ_ALLOCF_INTERNAL, NULL);
+ #endif
+   if (L) G(L)->panic = panic;
++  moon_newstate_call_cb(L);
+   return L;
+ }
+
+@@ -361,7 +365,7 @@ LUALIB_API lua_State *luaL_newstate(void)
+ LUA_API lua_State *lua_newstate(lua_Alloc f, void *ud)
+ {
+   UNUSED(f); UNUSED(ud);
+-  fputs("Must use luaL_newstate() for 64 bit target\n", stderr);
++  moon_writestring(L, "Must use luaL_newstate() for 64 bit target\n");
+   return NULL;
+ }
+ #endif
+diff --git a/src/lib_base.c b/src/lib_base.c
+index 98ec67c7..218416cd 100644
+--- a/src/lib_base.c
++++ b/src/lib_base.c
+@@ -37,6 +37,8 @@
+ #include "lj_strfmt.h"
+ #include "lj_lib.h"
+
++#include "moutput.h"
++
+ /* -- Base library: checks ------------------------------------------------ */
+
+ #define LJLIB_MODULE_base
+@@ -538,10 +540,10 @@ LJLIB_CF(print)
+       L->top--;
+     }
+     if (i)
+-      putchar('\t');
+-    fwrite(str, 1, size, stdout);
++      moon_writechar(L, '\t');
++    moon_writestringlength(L, str, size);
+   }
+-  putchar('\n');
++  moon_writechar(L, '\n');
+   return 0;
+ }
+
+diff --git a/src/lib_init.c b/src/lib_init.c
+index 35e06fe2..d8c7b02d 100644
+--- a/src/lib_init.c
++++ b/src/lib_init.c
+@@ -15,6 +15,9 @@
+
+ #include "lj_arch.h"
+
++#include "mloader.h"
++#include "mcompress.h"
++
+ static const luaL_Reg lj_lib_load[] = {
+   { "",			luaopen_base },
+   { LUA_LOADLIBNAME,	luaopen_package },
+@@ -26,6 +29,7 @@ static const luaL_Reg lj_lib_load[] = {
+   { LUA_DBLIBNAME,	luaopen_debug },
+   { LUA_BITLIBNAME,	luaopen_bit },
+   { LUA_JITLIBNAME,	luaopen_jit },
++  {LUA_MLOADERLIBNAME, luaopen_mloader},
+   { NULL,		NULL }
+ };
+
+@@ -33,6 +37,7 @@ static const luaL_Reg lj_lib_preload[] = {
+ #if LJ_HASFFI
+   { LUA_FFILIBNAME,	luaopen_ffi },
+ #endif
++  {LUA_MCOMPRESSLIBNAME, luaopen_mcompress},
+   { NULL,		NULL }
+ };
+
+diff --git a/src/lib_package.c b/src/lib_package.c
+index 63a91211..699aa867 100644
+--- a/src/lib_package.c
++++ b/src/lib_package.c
+@@ -17,6 +17,10 @@
+ #include "lj_err.h"
+ #include "lj_lib.h"
+
++#include "mloader.h"
++
++#include "maux.h"
++
+ /* ------------------------------------------------------------------------ */
+
+ /* Error codes for ll_loadfunc. */
+@@ -70,6 +74,8 @@ static const char *ll_bcsym(void *lib, const char *sym)
+ #define WIN32_LEAN_AND_MEAN
+ #include <windows.h>
+
++#include "mwinapi.h"
++
+ #ifndef GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
+ #define GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS  4
+ #define GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT  2
+@@ -128,7 +134,7 @@ static void pusherror(lua_State *L)
+
+ static void ll_unloadlib(void *lib)
+ {
+-  FreeLibrary((HINSTANCE)lib);
++  moon_FreeLibrary((HINSTANCE)lib);
+ }
+
+ static void *ll_load(lua_State *L, const char *path, int gl)
+@@ -141,7 +147,7 @@ static void *ll_load(lua_State *L, const char *path, int gl)
+
+ static lua_CFunction ll_sym(lua_State *L, void *lib, const char *sym)
+ {
+-  lua_CFunction f = (lua_CFunction)GetProcAddress((HINSTANCE)lib, sym);
++  lua_CFunction f = (lua_CFunction)moon_GetProcAddress((HINSTANCE)lib, sym);
+   if (f == NULL) pusherror(L);
+   return f;
+ }
+@@ -153,16 +159,16 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
+ static const char *ll_bcsym(void *lib, const char *sym)
+ {
+   if (lib) {
+-    return (const char *)GetProcAddress((HINSTANCE)lib, sym);
++    return (const char *)moon_GetProcAddress((HINSTANCE)lib, sym);
+   } else {
+ #if LJ_TARGET_UWP
+-    return (const char *)GetProcAddress((HINSTANCE)&__ImageBase, sym);
++    return (const char *)moon_GetProcAddress((HINSTANCE)&__ImageBase, sym);
+ #else
+-    HINSTANCE h = GetModuleHandleA(NULL);
+-    const char *p = (const char *)GetProcAddress(h, sym);
+-    if (p == NULL && GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
++    HINSTANCE h = moon_GetModuleHandleA(NULL);
++    const char *p = (const char *)moon_GetProcAddress(h, sym);
++    if (p == NULL && moon_GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+ 					(const char *)ll_bcsym, &h))
+-      p = (const char *)GetProcAddress(h, sym);
++      p = (const char *)moon_GetProcAddress(h, sym);
+     return p;
+ #endif
+   }
+@@ -584,9 +590,11 @@ static const luaL_Reg package_global[] = {
+ static const lua_CFunction package_loaders[] =
+ {
+   lj_cf_package_loader_preload,
+-  lj_cf_package_loader_lua,
+-  lj_cf_package_loader_c,
+-  lj_cf_package_loader_croot,
++  //lj_cf_package_loader_lua,
++  //lj_cf_package_loader_c,
++  //lj_cf_package_loader_croot,
++  moon_loader_lua,
++  moon_loader_c,
+   NULL
+ };
+
+diff --git a/src/lj_alloc.c b/src/lj_alloc.c
+index 20e60493..627505a3 100644
+--- a/src/lj_alloc.c
++++ b/src/lj_alloc.c
+@@ -80,6 +80,8 @@
+ #define WIN32_LEAN_AND_MEAN
+ #include <windows.h>
+
++#include "mwinapi.h"
++
+ #define LJ_ALLOC_VIRTUALALLOC	1
+
+ #if LJ_64 && !LJ_GC64
+@@ -135,7 +137,7 @@ static PNTAVM ntavm;
+
+ static void init_mmap(void)
+ {
+-  ntavm = (PNTAVM)GetProcAddress(GetModuleHandleA("ntdll.dll"),
++  ntavm = (PNTAVM)moon_GetProcAddress(moon_GetModuleHandleA("ntdll.dll"),
+ 				 "NtAllocateVirtualMemory");
+ }
+ #define INIT_MMAP()	init_mmap()
+@@ -200,7 +202,7 @@ static int CALL_MUNMAP(void *ptr, size_t size)
+     if (minfo.BaseAddress != cptr || minfo.AllocationBase != cptr ||
+ 	minfo.State != MEM_COMMIT || minfo.RegionSize > size)
+       return -1;
+-    if (VirtualFree(cptr, 0, MEM_RELEASE) == 0)
++    if (moon_VirtualFree(cptr, 0, MEM_RELEASE) == 0)
+       return -1;
+     cptr += minfo.RegionSize;
+     size -= minfo.RegionSize;
+diff --git a/src/lj_arch.h b/src/lj_arch.h
+index 5fb798d9..bf3ef69a 100644
+--- a/src/lj_arch.h
++++ b/src/lj_arch.h
+@@ -645,9 +645,9 @@
+ #define LJ_WIN_VPROTECT	VirtualProtectFromApp
+ extern void *LJ_WIN_LOADLIBA(const char *path);
+ #else
+-#define LJ_WIN_VALLOC	VirtualAlloc
+-#define LJ_WIN_VPROTECT	VirtualProtect
+-#define LJ_WIN_LOADLIBA(path)	LoadLibraryExA((path), NULL, 0)
++#define LJ_WIN_VALLOC	moon_VirtualAlloc
++#define LJ_WIN_VPROTECT	moon_VirtualProtect
++#define LJ_WIN_LOADLIBA(path)	moon_LoadLibraryExA((path), NULL, 0)
+ #endif
+ #endif
+
+diff --git a/src/lj_ccallback.c b/src/lj_ccallback.c
+index 43e44305..5348a0fc 100644
+--- a/src/lj_ccallback.c
++++ b/src/lj_ccallback.c
+@@ -250,6 +250,8 @@ static void *callback_mcode_init(global_State *g, uint32_t *page)
+ #define WIN32_LEAN_AND_MEAN
+ #include <windows.h>
+
++#include "mwinapi.h"
++
+ #elif LJ_TARGET_POSIX
+
+ #include <sys/mman.h>
+@@ -307,7 +309,7 @@ void lj_ccallback_mcode_free(CTState *cts)
+   void *p = cts->cb.mcode;
+   if (p == NULL) return;
+ #if LJ_TARGET_WINDOWS
+-  VirtualFree(p, 0, MEM_RELEASE);
++  moon_VirtualFree(p, 0, MEM_RELEASE);
+   UNUSED(sz);
+ #elif LJ_TARGET_POSIX
+   munmap(p, sz);
+diff --git a/src/lj_clib.c b/src/lj_clib.c
+index f0ef6edd..7312aaf8 100644
+--- a/src/lj_clib.c
++++ b/src/lj_clib.c
+@@ -148,6 +148,8 @@ static void *clib_getsym(CLibrary *cl, const char *name)
+ #define WIN32_LEAN_AND_MEAN
+ #include <windows.h>
+
++#include "mwinapi.h"
++
+ #ifndef GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
+ #define GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS	4
+ #define GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT	2
+@@ -227,12 +229,12 @@ static void clib_unloadlib(CLibrary *cl)
+       void *h = clib_def_handle[i];
+       if (h) {
+ 	clib_def_handle[i] = NULL;
+-	FreeLibrary((HINSTANCE)h);
++	moon_FreeLibrary((HINSTANCE)h);
+       }
+     }
+ #endif
+   } else if (cl->handle) {
+-    FreeLibrary((HINSTANCE)cl->handle);
++    moon_FreeLibrary((HINSTANCE)cl->handle);
+   }
+ }
+
+@@ -252,13 +254,13 @@ static void *clib_getsym(CLibrary *cl, const char *name)
+ 	h = (HINSTANCE)&__ImageBase;
+ #else
+ 	switch (i) {
+-	case CLIB_HANDLE_EXE: GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, NULL, &h); break;
++	case CLIB_HANDLE_EXE: moon_GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, NULL, &h); break;
+ 	case CLIB_HANDLE_DLL:
+-	  GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
++	  moon_GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+ 			     (const char *)clib_def_handle, &h);
+ 	  break;
+ 	case CLIB_HANDLE_CRT:
+-	  GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
++	  moon_GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+ 			     (const char *)&_fmode, &h);
+ 	  break;
+ 	case CLIB_HANDLE_KERNEL32: h = LJ_WIN_LOADLIBA("kernel32.dll"); break;
+@@ -269,11 +271,11 @@ static void *clib_getsym(CLibrary *cl, const char *name)
+ #endif
+ 	clib_def_handle[i] = (void *)h;
+       }
+-      p = (void *)GetProcAddress(h, name);
++      p = (void *)moon_GetProcAddress(h, name);
+       if (p) break;
+     }
+   } else {
+-    p = (void *)GetProcAddress((HINSTANCE)cl->handle, name);
++    p = (void *)moon_GetProcAddress((HINSTANCE)cl->handle, name);
+   }
+   return p;
+ }
+diff --git a/src/lj_mcode.c b/src/lj_mcode.c
+index 163aada4..5c4d161f 100644
+--- a/src/lj_mcode.c
++++ b/src/lj_mcode.c
+@@ -61,6 +61,8 @@ void lj_mcode_sync(void *start, void *end)
+ #define WIN32_LEAN_AND_MEAN
+ #include <windows.h>
+
++#include "mwinapi.h"
++
+ #define MCPROT_RW	PAGE_READWRITE
+ #define MCPROT_RX	PAGE_EXECUTE_READ
+ #define MCPROT_RWX	PAGE_EXECUTE_READWRITE
+@@ -77,7 +79,7 @@ static void *mcode_alloc_at(jit_State *J, uintptr_t hint, size_t sz, DWORD prot)
+ static void mcode_free(jit_State *J, void *p, size_t sz)
+ {
+   UNUSED(J); UNUSED(sz);
+-  VirtualFree(p, 0, MEM_RELEASE);
++  moon_VirtualFree(p, 0, MEM_RELEASE);
+ }
+
+ static int mcode_setprot(void *p, size_t sz, DWORD prot)
+diff --git a/src/lj_prng.c b/src/lj_prng.c
+index 01935e57..befa7678 100644
+--- a/src/lj_prng.c
++++ b/src/lj_prng.c
+@@ -15,6 +15,10 @@
+ #include "lj_arch.h"
+ #include "lj_prng.h"
+
++#if LJ_TARGET_WINDOWS
++#include "mwinapi.h"
++#endif
++
+ /* -- PRNG step function -------------------------------------------------- */
+
+ /* This implements a Tausworthe PRNG with period 2^223. Based on:
+@@ -197,7 +201,7 @@ int LJ_FASTCALL lj_prng_seed_secure(PRNGState *rs)
+   if (!libfunc_rgr) {
+     HMODULE lib = LJ_WIN_LOADLIBA("advapi32.dll");
+     if (!lib) return 0;
+-    libfunc_rgr = (PRGR)GetProcAddress(lib, "SystemFunction036");
++    libfunc_rgr = (PRGR)moon_GetProcAddress(lib, "SystemFunction036");
+     if (!libfunc_rgr) return 0;
+   }
+   if (libfunc_rgr(rs->u, (ULONG)sizeof(rs->u)))
+diff --git a/src/lj_profile.c b/src/lj_profile.c
+index 4a13537d..8948dec4 100644
+--- a/src/lj_profile.c
++++ b/src/lj_profile.c
+@@ -22,6 +22,10 @@
+
+ #include "luajit.h"
+
++#if LJ_TARGET_WINDOWS
++#include "mwinapi.h"
++#endif
++
+ #if LJ_PROFILE_SIGPROF
+
+ #include <sys/time.h>
+@@ -272,8 +276,8 @@ static void profile_timer_start(ProfileState *ps)
+   if (!ps->wmm) {  /* Load WinMM library on-demand. */
+     ps->wmm = LJ_WIN_LOADLIBA("winmm.dll");
+     if (ps->wmm) {
+-      ps->wmm_tbp = (WMM_TPFUNC)GetProcAddress(ps->wmm, "timeBeginPeriod");
+-      ps->wmm_tep = (WMM_TPFUNC)GetProcAddress(ps->wmm, "timeEndPeriod");
++      ps->wmm_tbp = (WMM_TPFUNC)moon_GetProcAddress(ps->wmm, "timeBeginPeriod");
++      ps->wmm_tep = (WMM_TPFUNC)moon_GetProcAddress(ps->wmm, "timeEndPeriod");
+       if (!ps->wmm_tbp || !ps->wmm_tep) {
+ 	ps->wmm = NULL;
+ 	return;
+diff --git a/src/lj_vmevent.c b/src/lj_vmevent.c
+index c8491d82..9db956c4 100644
+--- a/src/lj_vmevent.c
++++ b/src/lj_vmevent.c
+@@ -16,6 +16,8 @@
+ #include "lj_vm.h"
+ #include "lj_vmevent.h"
+
++#include "moutput.h"
++
+ ptrdiff_t lj_vmevent_prepare(lua_State *L, VMEvent ev)
+ {
+   global_State *g = G(L);
+@@ -47,9 +49,9 @@ void lj_vmevent_call(lua_State *L, ptrdiff_t argbase)
+   if (LJ_UNLIKELY(status)) {
+     /* Really shouldn't use stderr here, but where else to complain? */
+     L->top--;
+-    fputs("VM handler failed: ", stderr);
+-    fputs(tvisstr(L->top) ? strVdata(L->top) : "?", stderr);
+-    fputc('\n', stderr);
++    moon_writestring(L, "VM handler failed: ");
++    moon_writestring(L, tvisstr(L->top) ? strVdata(L->top) : "?");
++    moon_writechar(L, '\n');
+   }
+   hook_restore(g, oldh);
+   if (g->vmevmask != VMEVENT_NOCACHE)
+diff --git a/src/luaconf.h b/src/luaconf.h
+index e8790c1d..95308390 100644
+--- a/src/luaconf.h
++++ b/src/luaconf.h
+@@ -126,13 +126,21 @@
+ /* Linkage of public API functions. */
+ #if defined(LUA_BUILD_AS_DLL)
+ #if defined(LUA_CORE) || defined(LUA_LIB)
++#if defined(__cplusplus)
++#define LUA_API		extern "C" __declspec(dllexport)
++#else
+ #define LUA_API		__declspec(dllexport)
++#endif
+ #else
+ #define LUA_API		__declspec(dllimport)
+ #endif
+ #else
++#if defined(__cplusplus)
++#define LUA_API		extern "C"
++#else
+ #define LUA_API		extern
+ #endif
++#endif
+
+ #define LUALIB_API	LUA_API
+
