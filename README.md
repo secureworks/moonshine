@@ -1,3 +1,6 @@
+:no_entry: [DEPRECATED] Active at: https://github.com/sidaf/moonshine
+
+
 # What?
 
 Moonshine is a C2 framework with a custom Lua interpreter (called Moon, see [here](extern/moon/README.md) for further details) runtime at it's core. The runtime is used in the implants to execute scripts on the remote host, with the option of loading Lua C or script modules to provide additional functionality. The communication channels for both implant and server are implemented as Lua scripts, allowing for complete control and flexibility.
